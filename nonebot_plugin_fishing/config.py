@@ -1,6 +1,12 @@
 from pydantic import BaseModel
 from typing import List, Dict
-from nonebot import get_plugin_config
+
+try:
+    # pydantic v2
+    from nonebot import get_plugin_config
+except ImportError:
+    # pydantic v1
+    from nonebot import get_driver
 
 
 class Config(BaseModel):
@@ -9,35 +15,41 @@ class Config(BaseModel):
             "name": "小鱼",
             "frequency": 2,
             "weight": 100,
-            "price": 2
+            "price": 10
         },
         {
             "name": "尚方宝剑",
             "frequency": 2,
-            "weight": 100,
-            "price": 1
+            "weight": 50,
+            "price": 20
         },
         {
             "name": "小杂鱼~♡",
-            "frequency": 3,
-            "weight": 5,
+            "frequency": 10,
+            "weight": 10,
             "price": 100
         },
         {
             "name": "烤激光鱼",
-            "frequency": 10,
+            "frequency": 20,
             "weight": 1,
             "price": 1000
+        },
+        {
+            "name": "大傻",
+            "frequency": 30,
+            "weight": 1,
+            "price": 2000
         }
     ]
 
     fishing_limit: int = 30
 
-    fishing_coin_name: str = "FC"  # It means Fishing Coin.
+    fishing_coin_name: str = "绿宝石"  # It means Fishing Coin.
 
-    special_fish_enabled: bool = False
+    special_fish_enabled: bool = True
 
-    special_fish_price: int = 50
+    special_fish_price: int = 200
 
     special_fish_probability: float = 0.01
 
@@ -65,8 +77,21 @@ class Config(BaseModel):
             "name": "那一晚, 激光鱼和便携式烤炉都喝醉了",
             "data": "烤激光鱼",
             "description": "获得烤激光鱼。"
+        },
+        {
+            "type": "fish_type",
+            "name": "你怎么把 Fufu 钓上来了",
+            "data": "大傻",
+            "description": "获得大傻"
         }
     ]
 
 
 config = get_plugin_config(Config)
+
+try:
+    # pydantic v2
+    plugin_config = get_plugin_config(Config)
+except:
+    # pydantic v1
+    plugin_config = Config.parse_obj(get_driver().config)

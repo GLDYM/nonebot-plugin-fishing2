@@ -10,7 +10,7 @@ from .config import config
 from .model import FishingRecord, SpecialFishes
 
 fishing_coin_name = config.fishing_coin_name
-
+fish_list = [fish["name"] for fish in config.fishes]
 
 def choice() -> tuple:
     config_fishes = config.fishes
@@ -227,8 +227,8 @@ async def get_stats(user_id: str) -> str:
         select_user = select(FishingRecord).where(FishingRecord.user_id == user_id)
         fishing_record = await session.scalar(select_user)
         if fishing_record:
-            return f"你钓鱼了 {fishing_record.frequency} 次"
-        return "你还没有钓过鱼，快去钓鱼吧"
+            return f"🐟你钓鱼了 {fishing_record.frequency} 次"
+        return "🐟你还没有钓过鱼，快去钓鱼吧"
 
 
 def print_backpack(backpack: dict, special_backpack=None) -> str:
@@ -242,8 +242,8 @@ def print_backpack(backpack: dict, special_backpack=None) -> str:
             f"{fish_name}×{str(quantity)}"
             for fish_name, quantity in special_backpack.items()
         ]
-        return "背包:\n" + "\n".join(result) + "\n\n特殊鱼:\n" + "\n".join(special_result)
-    return "背包:\n" + "\n".join(result)
+        return "🎒背包:\n" + "\n".join(result) + "\n\n特殊鱼:\n" + "\n".join(special_result)
+    return "🎒背包:\n" + "\n".join(result)
 
 
 async def get_backpack(user_id: str) -> str:
@@ -257,8 +257,8 @@ async def get_backpack(user_id: str) -> str:
             load_special_fishes = json.loads(fishes_record.special_fishes)
             if load_special_fishes:
                 return print_backpack(load_fishes, load_special_fishes)
-            return "你的背包里空无一物" if load_fishes == {} else print_backpack(load_fishes)
-        return "你的背包里空无一物"
+            return "🎒你的背包里空无一物" if load_fishes == {} else print_backpack(load_fishes)
+        return "🎒你的背包里空无一物"
 
 
 async def sell_fish(user_id: str, fish_name: str, quantity: int = 1) -> str:
@@ -281,6 +281,7 @@ async def sell_fish(user_id: str, fish_name: str, quantity: int = 1) -> str:
         fishes_record = await session.scalar(select_user)
         if fishes_record := fishes_record:
             loads_fishes = json.loads(fishes_record.fishes)
+            spec_fishes = json.loads(fishes_record.special_fishes)
             if fish_name in loads_fishes and loads_fishes[fish_name] > 0:
                 fish_price = get_price(fish_name)
                 if loads_fishes[fish_name] < quantity:
@@ -299,7 +300,26 @@ async def sell_fish(user_id: str, fish_name: str, quantity: int = 1) -> str:
                 await session.commit()
                 return (f"你以 {fish_price} {fishing_coin_name} / 条的价格卖出了 {quantity} 条 {fish_name}, "
                         f"你获得了 {fish_price * quantity} {fishing_coin_name}")
-            return "查无此鱼"
+            elif fish_name in spec_fishes and spec_fishes[fish_name] > 0:
+                fish_price = config.special_fish_price
+                if spec_fishes[fish_name] < quantity:
+                    return f"{fish_name} 太少了!"
+                spec_fishes[fish_name] -= quantity
+                if spec_fishes[fish_name] == 0:
+                    del spec_fishes[fish_name]
+                dump_fishes = json.dumps(spec_fishes)
+                user_update = update(FishingRecord).where(
+                    FishingRecord.user_id == user_id
+                ).values(
+                    coin=fishes_record.coin + fish_price * quantity,
+                    special_fishes=dump_fishes
+                )
+                await session.execute(user_update)
+                await session.commit()
+                return (f"你以 {fish_price} {fishing_coin_name} / 条的价格卖出了 {quantity} 条 {fish_name}, "
+                        f"你获得了 {fish_price * quantity} {fishing_coin_name}")
+            else:         
+                return "查无此鱼"
         else:
             return "还没钓鱼就想卖鱼?"
 
@@ -311,8 +331,8 @@ async def get_balance(user_id: str) -> str:
         select_user = select(FishingRecord).where(FishingRecord.user_id == user_id)
         fishes_record = await session.scalar(select_user)
         if fishes_record:
-            return f"你有 {fishes_record.coin} {fishing_coin_name}"
-        return "你什么也没有 :)"
+            return f"🪙你有 {fishes_record.coin} {fishing_coin_name}"
+        return "🪙你什么也没有 :)"
 
 
 async def free_fish(user_id: str, fish_name: str) -> str:
@@ -322,23 +342,38 @@ async def free_fish(user_id: str, fish_name: str) -> str:
         fishes_record = await session.scalar(select_user)
         if fishes_record:
             user_coin = fishes_record.coin
-            if user_coin < config.special_fish_price:
-                special_fish_coin_less = str(config.special_fish_price - fishes_record.coin)
-                return f"你没有足够的 {fishing_coin_name}, 还需 {special_fish_coin_less} {fishing_coin_name}"
-            user_coin -= config.special_fish_price
-            new_record = SpecialFishes(
-                user_id=user_id,
-                fish=fish_name
-            )
-            session.add(new_record)
-            user_update = update(FishingRecord).where(
-                FishingRecord.user_id == user_id
-            ).values(
-                coin=user_coin
-            )
-            await session.execute(user_update)
-            await session.commit()
-            return f"你花费 {config.special_fish_price} {fishing_coin_name} 放生了 {fish_name}, 未来或许会被有缘人钓到呢"
+            spec_fishes = fishes_record.special_fishes
+            if fish_name in spec_fishes and spec_fishes[fish_name] > 0:
+                spec_fishes[fish_name] -= 1
+                if spec_fishes[fish_name] == 0:
+                    del spec_fishes[fish_name]
+                dump_fishes = json.dumps(spec_fishes)
+                user_update = update(FishingRecord).where(
+                    FishingRecord.user_id == user_id
+                ).values(
+                    special_fishes=dump_fishes
+                )
+                await session.execute(user_update)
+                await session.commit()
+                return f"你再次放生了 {fish_name}, 未来或许会被有缘人钓到呢"
+            else:
+                if user_coin < config.special_fish_price // 2:
+                    special_fish_coin_less = str(config.special_fish_price // 2 - fishes_record.coin)
+                    return f"你没有足够的 {fishing_coin_name}, 还需 {special_fish_coin_less} {fishing_coin_name}"
+                user_coin -= config.special_fish_price // 2
+                new_record = SpecialFishes(
+                    user_id=user_id,
+                    fish=fish_name
+                )
+                session.add(new_record)
+                user_update = update(FishingRecord).where(
+                    FishingRecord.user_id == user_id
+                ).values(
+                    coin=user_coin
+                )
+                await session.execute(user_update)
+                await session.commit()
+                return f"你花费 {config.special_fish_price // 2} {fishing_coin_name} 放生了 {fish_name}, 未来或许会被有缘人钓到呢"
         return "你甚至还没钓过鱼"
 
 
@@ -373,18 +408,33 @@ async def give(user_id: str, fish_name: str, quantity: int = 1) -> str:
         record = await session.scalar(select_user)
         if record:
             loads_fishes = json.loads(record.fishes)
-            try:
-                loads_fishes[fish_name] += quantity
-            except KeyError:
-                loads_fishes[fish_name] = quantity
-            dump_fishes = json.dumps(loads_fishes)
-            user_update = update(FishingRecord).where(
-                FishingRecord.user_id == user_id
-            ).values(
-                fishes=dump_fishes
-            )
-            await session.execute(user_update)
-            await session.commit()
+            spec_fishes = json.loads(record.special_fishes)
+            if fish_name in fish_list:
+                try:
+                    loads_fishes[fish_name] += quantity
+                except KeyError:
+                    loads_fishes[fish_name] = quantity
+                dump_fishes = json.dumps(loads_fishes)
+                user_update = update(FishingRecord).where(
+                    FishingRecord.user_id == user_id
+                ).values(
+                    fishes=dump_fishes
+                )
+                await session.execute(user_update)
+                await session.commit()
+            else:
+                try:
+                    spec_fishes[fish_name] += quantity
+                except KeyError:
+                    spec_fishes[fish_name] = quantity
+                dump_fishes = json.dumps(spec_fishes)
+                user_update = update(FishingRecord).where(
+                    FishingRecord.user_id == user_id
+                ).values(
+                    special_fishes=dump_fishes
+                )
+                await session.execute(user_update)
+                await session.commit()
             return f"使用滥权之力成功使 {fish_name} 添加到 {user_id} 的背包之中 ヾ(≧▽≦*)o"
         return "未查找到用户信息, 无法执行滥权操作 w(ﾟДﾟ)w"
 
@@ -398,3 +448,16 @@ async def get_achievements(user_id: str) -> str:
             achievements = json.loads(record.achievements)
             return "已完成成就:\n" + "\n".join(achievements)
         return "你甚至还没钓过鱼 (╬▔皿▔)╯"
+
+async def get_board() -> list:
+    session = get_session()
+    async with session.begin():
+        select_users = select(FishingRecord).order_by(FishingRecord.coin.desc()).limit(10)
+        record = await session.scalars(select_users)
+        if record:
+            top_users_list = []
+            for user in record:
+                top_users_list.append((user.user_id, user.coin))
+            top_users_list.sort(key=lambda user: user[1], reverse=True)
+            return top_users_list
+        return []
