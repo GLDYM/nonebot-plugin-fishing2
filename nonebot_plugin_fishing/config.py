@@ -87,11 +87,9 @@ class Config(BaseModel):
     ]
 
 
-config = get_plugin_config(Config)
-
 try:
     # pydantic v2
-    plugin_config = get_plugin_config(Config)
+    config = get_plugin_config(Config)
 except:
     # pydantic v1
-    plugin_config = Config.parse_obj(get_driver().config)
+    config = Config.parse_obj(get_driver().config)
