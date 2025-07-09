@@ -119,6 +119,6 @@ FISHES='
 - [x] 增加系统商店，卖出钓到的鱼们
 - [x] 赛博放生 [#4](https://github.com/C14H22O/nonebot-plugin-fishing/issues/4) （已基本完成）
 - [ ] 使用 [nonebot_plugin_chikari_economy](https://github.com/mrqx0195/nonebot_plugin_chikari_economy) 经济系统
-- [ ] 为鱼竿增加耐久度，耐久度为0时需重新购买鱼竿
+- [x] 为鱼竿增加耐久度，耐久度为0时需重新购买鱼竿
 - [ ] 为钓鱼背包添加排序
 - [x] 添加成就系统

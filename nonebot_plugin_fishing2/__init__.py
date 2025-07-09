@@ -17,6 +17,8 @@ from typing import Union
 
 from .config import Config, config
 from .data_source import (
+    fish_list,
+    get_info,
     can_fishing,
     can_free_fish,
     get_fish,
@@ -31,23 +33,26 @@ from .data_source import (
     get_achievements,
     get_board,
     check_tools,
-    remove_tools
+    remove_tools,
+    get_shop,
+    buy_fish
 )
 
 fishing_coin_name = config.fishing_coin_name
 
 __plugin_meta__ = PluginMetadata(
-    name="赛博钓鱼",
-    description="你甚至可以电子钓鱼",
+    name="更好的电子钓鱼",
+    description="赛博钓鱼……但是加强版本",
     usage=f'''钓鱼帮助
-▶ 查询 [物品]：
+▶ 查询 [物品]：查询某个物品的信息
 ▶ 钓鱼 [鱼竿] [鱼饵]：
   ▷ 有 {config.fishing_limit}s 的冷却，时间随上一条鱼稀有度而增加
-  ▷ 加参数可以使用鱼饵或鱼竿，同时只能使用一种 
+  ▷ 加参数可以使用鱼饵或鱼竿，同类物品同时只能使用一种 
   ▷ 频繁钓鱼会触怒河神
 ▶ 出售 <物品> <数量>：出售物品获得{fishing_coin_name}
-▶ 购买 <鱼名> <数量>：【尚未实现】
+▶ 购买 <物品> <份数>：购买渔具店的物品
 ▶ 放生 <鱼名>：给一条鱼取名并放生
+▶ 商店：看看渔具店都有些啥
 ▶ 祈愿：向神祈愿，随机获取/损失{fishing_coin_name}
 ▶ 背包：查看背包中的{fishing_coin_name}与物品
 ▶ 成就：查看拥有的成就
@@ -57,6 +62,11 @@ __plugin_meta__ = PluginMetadata(
     homepage="https://github.com/FDCraft/nonebot-plugin-fishing2",
     config=Config,
     supported_adapters=None,
+    extra={
+        'author': 'Polaris_Light',
+        'version': '0.0.3',
+        'priority': 5
+    }
 )
 
 
@@ -68,7 +78,8 @@ fishing_help = on_command("fishing_help", aliases={"钓鱼帮助"}, priority=3,b
 fishing_lookup = on_command("fishing_lookup", aliases={"查看", "查询"}, priority=3,block=True)
 fishing = on_command("fishing", aliases={"钓鱼"}, priority=5)
 backpack = on_command("backpack", aliases={"背包", "钓鱼背包"}, priority=5)
-buy = on_command("buy", aliases={"购买", "商店"}, priority=5)
+shop = on_command("shop", aliases={"商店"}, priority=5)
+buy = on_command("buy", aliases={"购买"}, priority=5)
 sell = on_command("sell", aliases={"卖鱼", "出售", "售卖"}, priority=5)
 free_fish_cmd = on_command("free_fish", aliases={"放生", "钓鱼放生"}, priority=5)
 lottery_cmd = on_command("lottery", aliases={"祈愿"}, priority=5)
@@ -81,29 +92,19 @@ board_cmd = on_command("board", aliases={"排行榜", "钓鱼排行榜"}, priori
 async def _():
     await fishing_help.finish(__plugin_meta__.usage)
 
-
-async def punish(bot: Bot, event: Event, matcher: Matcher, user_id: int):
-    global punish_user_dict
+@shop.handle()
+async def _(bot: Bot, event: Union[GroupMessageEvent, PrivateMessageEvent]):
+    messages = get_shop()
+    await forward_send(bot, event, messages)
+    return None
     
-    if not await can_fishing(user_id):
-        try:
-            punish_user_dict[user_id] += 1
-        except KeyError:
-            punish_user_dict[user_id] = 1
-
-        if punish_user_dict[user_id] < config.punish_limit - 1 :
-            await matcher.finish(MessageSegment.at(user_id) + " " + "河累了，休息一下吧")
-        elif punish_user_dict[user_id] == config.punish_limit - 1:
-            await matcher.finish(MessageSegment.at(user_id) + " " + "河神快要不耐烦了")
-        elif punish_user_dict[user_id] == config.punish_limit:
-            groud_id = event.group_id if isinstance(event, GroupMessageEvent) else None
-            try:
-                await bot.set_group_ban(group_id=groud_id, user_id=user_id, duration=1800)
-            except ActionFailed:
-                pass
-            await matcher.finish(MessageSegment.at(user_id) + " " + "河神生气了，降下了惩罚")
-        else:
-            await matcher.finish()
+@fishing_lookup.handle()
+async def _(bot: Bot, event: Union[GroupMessageEvent, PrivateMessageEvent], arg: Message = CommandArg()):
+    arg = arg.extract_plain_text()
+    if not arg or arg == "":
+        await fishing_lookup.finish("请输入要查询的物品\n可查询物品：" + "、".join(fish_list))
+    await forward_send(bot, event, get_info(arg))
+    return None
 
 
 @fishing.handle()
@@ -153,12 +154,17 @@ async def _(event: Event, arg: Message = CommandArg()):
     fish_info = arg.extract_plain_text()
     user_id = event.get_user_id()
     if fish_info == "":
-        await buy.finish(MessageSegment.at(user_id) + " " + "请输入要买入的鱼的名字和数量 (数量为1时可省略), 如 /购买 鱼竿 1")
+        await buy.finish(MessageSegment.at(user_id) + " " + "请输入要买入物品的名字和份数 (份数为1时可省略), 如 /购买 钛金鱼竿 1")
     if len(fish_info.split()) == 1:
-        await buy.finish(MessageSegment.at(user_id) + " " + await sell_fish(user_id, fish_info))
+        result = await buy_fish(user_id, fish_info)
     else:
         fish_name, fish_quantity = fish_info.split()
-        await buy.finish(MessageSegment.at(user_id) + " " + await sell_fish(user_id, fish_name, int(fish_quantity)))
+        result = await buy_fish(user_id, fish_name, int(fish_quantity))
+    achievements = await check_achievement(user_id)
+    if achievements is not None:
+        for achievement in achievements:
+            await fishing.send(achievement)
+    await buy.finish(MessageSegment.at(user_id) + " " + result)
 
 
 @sell.handle()
@@ -237,4 +243,60 @@ async def _(bot: Bot, event: GroupMessageEvent):
     await board_cmd.finish(msg)
             
             
+
+async def punish(bot: Bot, event: Event, matcher: Matcher, user_id: int):
+    global punish_user_dict
+    
+    if not await can_fishing(user_id):
+        try:
+            punish_user_dict[user_id] += 1
+        except KeyError:
+            punish_user_dict[user_id] = 1
+
+        if punish_user_dict[user_id] < config.punish_limit - 1 :
+            await matcher.finish(MessageSegment.at(user_id) + " " + "河累了，休息一下吧")
+        elif punish_user_dict[user_id] == config.punish_limit - 1:
+            await matcher.finish(MessageSegment.at(user_id) + " " + "河神快要不耐烦了")
+        elif punish_user_dict[user_id] == config.punish_limit:
+            groud_id = event.group_id if isinstance(event, GroupMessageEvent) else None
+            try:
+                await bot.set_group_ban(group_id=groud_id, user_id=user_id, duration=1800)
+            except ActionFailed:
+                pass
+            await matcher.finish(MessageSegment.at(user_id) + " " + "河神生气了，降下了惩罚")
+        else:
+            await matcher.finish()
+
+
+async def forward_send(bot: Bot, event: Union[GroupMessageEvent, PrivateMessageEvent], messages: list[MessageSegment]) -> None:
+    if isinstance(event, GroupMessageEvent):
+        await bot.send_group_forward_msg(
+            group_id=event.group_id,
+                messages=[
+                    {
+                        "type": "node",
+                        "data": {
+                            "name": "花花",
+                            "uin": bot.self_id,
+                            "content": msg,
+                        },
+                    }
+                    for msg in messages
+                ],
+            )
+    else:
+        await bot.send_private_forward_msg(
+            user_id=event.user_id,
+            messages=[
+                {
+                    "type": "node",
+                    "data": {
+                        "name": "花花",
+                        "uin": bot.self_id,
+                        "content": msg,
+                    },
+                }
+                for msg in messages
+            ],
+        )
     

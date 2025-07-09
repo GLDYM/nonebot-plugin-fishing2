@@ -7,6 +7,7 @@ import json
 from typing import Union
 from sqlalchemy import select, update, delete
 from sqlalchemy.sql.expression import func
+from nonebot.adapters.onebot.v11 import MessageSegment
 from nonebot_plugin_orm import get_session
 
 from .config import config
@@ -15,8 +16,40 @@ from .model import FishingRecord, SpecialFishes
 fishing_coin_name = config.fishing_coin_name
 fish_list = [fish["name"] for fish in config.fishes]
 can_catch_fishes = {fish["name"]: fish["weight"] for fish in config.fishes if fish["can_catch"]}
-can_buy_fishes = [fish["name"] for fish in config.fishes if fish["can_catch"]]
+can_buy_fishes = [fish["name"] for fish in config.fishes if fish["can_buy"]]
 can_sell_fishes = [fish["name"] for fish in config.fishes if fish["can_sell"]]
+
+def get_info(fish_name: str) -> list[MessageSegment]:
+    message = []
+    for fish in config.fishes:
+        if fish.get("name") == fish_name:
+            message1 = ""
+            message1 += f'▶ 名称：{fish_name}\n'
+            message1 += f'▶ 基准价格：{fish["price"]} {fishing_coin_name}\n'
+            message1 += f'▶ 描述：{fish["description"]}\n'
+            message1 += f'▶ {"可钓鱼获取" if fish["can_catch"] else "不可钓鱼获取"}，'
+            message1 += f'{"可购买" if fish["can_buy"] else "不可购买"}，'
+            message1 += f'{"可出售" if fish["can_sell"] else "不可出售"}'
+            message.append(MessageSegment.text(message1))
+            if fish["can_catch"]:
+                message2 = ""
+                message2 += f'▶ 钓鱼信息：\n'              
+                message2 += f'  ▷ 基础权重：{fish["weight"]}，'
+                message2 += f'上钩时间：{fish["frequency"]}s'
+                message.append(MessageSegment.text(message2))
+            if fish["can_buy"]:
+                message3 = ""
+                message3 += f'▶ 商店信息：\n'
+                message3 += f'  ▷ 出售价格：{fish["price"] * 2}，'
+                message3 += f'单份数量：{fish.get("amount") if fish.get("amount") else 1}'
+                message.append(MessageSegment.text(message3))
+            if fish.get("props") and fish["props"] != []:
+                message4 = ""
+                message4 += f'▶ 道具信息：\n'
+                message4 += f'  ▷ 道具类型：{"鱼饵" if fish["type"] == "fish" else "道具"}\n'
+                message4 += print_props(fish["props"])
+                message.append(MessageSegment.text(message4))
+            return message
 
 def adjusted_choice(adjusts: list[dict[str, Union[str, int]]] = None) -> str:
 
@@ -28,11 +61,11 @@ def adjusted_choice(adjusts: list[dict[str, Union[str, int]]] = None) -> str:
                 continue
             match adjust["type"]:
                 case "normal_fish":
-                    for key, weight in can_catch_fishes:
+                    for key, weight in can_catch_fishes.items():
                         if weight >= 500 and key in adjusted_fishes:
                             adjusted_fishes[key] += adjust["value"]
                 case "rare_fish":
-                    for key, weight in can_catch_fishes:
+                    for key, weight in can_catch_fishes.items():
                         if weight < 500 and key in adjusted_fishes:
                             adjusted_fishes[key] += adjust["value"]
                 case "fish":
@@ -46,6 +79,10 @@ def adjusted_choice(adjusts: list[dict[str, Union[str, int]]] = None) -> str:
     
     adjusted_fishes_list = list(adjusted_fishes.keys())
     adjusted_weights = list(adjusted_fishes.values())
+    
+    for i in range(len(adjusted_weights)):
+        if adjusted_weights[i] < 0:
+            adjusted_weights[i] = 0
     
     choices = random.choices(
         adjusted_fishes_list,
@@ -126,6 +163,25 @@ def get_frequency(fish_name: str) -> int:
         60
     )
 
+def print_props(props: list) -> str:
+    """打印鱼的属性"""
+    result = "  ▷ 道具效果：\n"
+    for i in range(len(props)):
+        prop = props[i]
+        match prop["type"]:
+            case "normal_fish":
+                result += f"    {i + 1}. 普通鱼权重{'增加' if prop['value'] > 0 else '减少'}{prop['value']}\n"
+            case "rare_fish":
+                result += f"    {i + 1}. 稀有鱼权重{'增加' if prop['value'] > 0 else '减少'}{prop['value']}\n"
+            case "fish":
+                result += f"    {i + 1}. {prop['key']}权重{'增加' if prop['value'] > 0 else '减少'}{prop['value']}\n"
+            case "rm_fish":
+                result += f"    {i + 1}. 不会钓到{prop['key']}\n"
+            case "special_fish":
+                result += f"    {i + 1}. 特殊鱼概率{'增加' if prop['value'] > 0 else '减少'}{prop['value']}\n"
+            case _:
+                pass
+    return result
 
 async def random_get_a_special_fish() -> str:
     """随机返回一条别人放生的鱼"""
@@ -346,10 +402,12 @@ async def get_backpack(user_id: str) -> str:
         fishes_record = await session.scalar(select_user)
         if fishes_record:
             load_fishes = json.loads(fishes_record.fishes)
+            sorted_fishes = {key: load_fishes[key] for key in fish_list if key in load_fishes}
             load_special_fishes = json.loads(fishes_record.special_fishes)
             if load_special_fishes:
-                return print_backpack(load_fishes, load_special_fishes)
-            return "🎒你的背包里空无一物" if load_fishes == {} else print_backpack(load_fishes)
+                sorted_special_fishes = {key: load_special_fishes[key] for key in sorted(load_special_fishes)}
+                return print_backpack(sorted_fishes, sorted_special_fishes)
+            return "🎒你的背包里空无一物" if sorted_fishes == {} else print_backpack(sorted_fishes)
         return "🎒你的背包里空无一物"
 
 
@@ -367,6 +425,8 @@ async def sell_fish(user_id: str, fish_name: str, quantity: int = 1) -> str:
     """
     if quantity <= 0:
         return "你在卖什么 w(ﾟДﾟ)w"
+    if fish_name not in can_sell_fishes:
+        return f"这个 {fish_name} 不可以卖哦~"
     session = get_session()
     async with session.begin():
         select_user = select(FishingRecord).where(FishingRecord.user_id == user_id)
@@ -376,8 +436,6 @@ async def sell_fish(user_id: str, fish_name: str, quantity: int = 1) -> str:
             spec_fishes = json.loads(fishes_record.special_fishes)
             if fish_name in loads_fishes and loads_fishes[fish_name] > 0:
                 fish_price = get_price(fish_name)
-                if fish_name not in can_sell_fishes:
-                    return f"这个 {fish_name} 不可以卖哦~"
                 if loads_fishes[fish_name] < quantity:
                     return f"你没有那么多 {fish_name}"
                 loads_fishes[fish_name] -= quantity
@@ -416,6 +474,48 @@ async def sell_fish(user_id: str, fish_name: str, quantity: int = 1) -> str:
                 return "查无此鱼"
         else:
             return "还没钓鱼就想卖鱼?"
+        
+
+async def buy_fish(user_id: str, fish_name: str, quantity: int = 1) -> str:
+    if quantity <= 0:
+        return "别在渔具店老板面前炫耀自己的鱼 (..-˘ ˘-.#)"
+    if fish_name not in can_buy_fishes:
+        return "商店不卖这个！"
+    
+    for fish in config.fishes:
+        if fish["name"] == fish_name:
+            price = fish["price"] * 2
+            amount = fish["amount"] if fish.get("amount") else 1
+            total_price = price * amount * quantity
+            break
+    
+    session = get_session()
+    async with session.begin():
+        select_user = select(FishingRecord).where(FishingRecord.user_id == user_id)
+        fishes_record = await session.scalar(select_user)
+        if fishes_record := fishes_record:
+            loads_fishes = json.loads(fishes_record.fishes)
+            user_coin = fishes_record.coin
+            if user_coin < total_price:
+                coin_less = str(total_price - fishes_record.coin)
+                return f"你没有足够的 {fishing_coin_name}, 还需 {coin_less} {fishing_coin_name}"
+            user_coin -= total_price
+            try:
+                loads_fishes[fish_name] += amount * quantity
+            except KeyError:
+                loads_fishes[fish_name] = amount * quantity
+            dump_fishes = json.dumps(loads_fishes)
+            user_update = update(FishingRecord).where(
+                FishingRecord.user_id == user_id
+            ).values(
+                coin=user_coin,
+                fishes=dump_fishes
+            )
+            await session.execute(user_update)
+            await session.commit()
+            return (f"你用 {total_price} {fishing_coin_name} 买入了 {quantity * amount} {fish_name}")
+        else:
+            return "不想钓鱼的人就别在渔具店逛了~"
 
 
 async def get_balance(user_id: str) -> str:
@@ -587,8 +687,22 @@ async def get_board() -> list:
             return top_users_list
         return []
 
-async def get_shop() -> str | None:
-    pass
+def get_shop() -> list[MessageSegment]:
+    messages: list[MessageSegment] = []
+    
+    messages.append(MessageSegment.text("===== 渔具店 ====="))
+    
+    for fish in config.fishes:
+        if fish.get("can_buy"):
+            name = fish["name"]
+            price = fish["price"] * 2
+            amount = fish["amount"] if fish.get("amount") else 1
+            total_price = price * amount
+            desc = fish["description"] if fish.get("description") else ""
+            messages.append(MessageSegment.text(f"商品名：{name} \n单份数量：{amount}\n单价：{price} {fishing_coin_name}\n单份总价：{total_price} {fishing_coin_name}\n描述：{desc}"))
+    
+    return messages
+    
 
 async def check_tools(user_id: str, tools: list) -> str | None:
     # 这是工具吗？

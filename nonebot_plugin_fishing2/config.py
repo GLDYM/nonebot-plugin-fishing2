@@ -21,11 +21,12 @@ class Config(BaseModel):
                     "key": "小鱼"
                 }
             ],
-            "description": "一条小鱼。\n把它当做鱼饵可以防止钓到小鱼。",
+            "description": "一条小鱼。把它当做鱼饵可以防止钓到小鱼。",
             "can_catch": True,
             "frequency": 2,
             "weight": 1000,
-            "can_buy": False,
+            "can_buy": True,
+            "amount": 1,
             "can_sell": True
         },
         {
@@ -84,7 +85,19 @@ class Config(BaseModel):
             "description": "非常能吃大米。",
             "can_catch": True,
             "frequency": 30,
-            "weight": 1,
+            "weight": 10,
+            "can_buy": False,
+            "can_sell": True
+        },
+        {
+            "type": "fish",
+            "name": "帕秋莉",
+            "price": 8000,
+            "props": [],
+            "description": "Neet姬，非常难在图书馆外见到她。",
+            "can_catch": True,
+            "frequency": 120,
+            "weight": 0,
             "can_buy": False,
             "can_sell": True
         },
@@ -95,19 +108,19 @@ class Config(BaseModel):
             "props": [
                 {
                     "type": "rare_fish",
-                    "value": 50
+                    "value": 10
                 }    
             ],
             "description": "更坚韧的鱼竿，显著提升钓上大鱼的概率。",
             "can_catch": False,
             "can_buy": True,
-            "count": 30,
+            "amount": 30,
             "can_sell": False
         },
         {
             "type": "fish",
             "name": "大米",
-            "price": 10000,
+            "price": 2000,
             "props": [
                 {
                     "type": "fish",
@@ -171,6 +184,12 @@ class Config(BaseModel):
             "data": "琪露诺",
             "description": "发现了湖边的冰之精灵"
         },
+        {
+            "type": "fish_type",
+            "name": "不动的大图书馆",
+            "data": "帕秋莉",
+            "description": "Neet 姬好不容易出门一次，就被你钓上来了？"
+        }
     ]
 
 
