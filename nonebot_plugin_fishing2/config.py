@@ -8,26 +8,28 @@ except ImportError:
     # pydantic v1
     from nonebot import get_driver
 
-
+# fmt:off
 class Config(BaseModel):
     fishes: List[Dict] = [
         {
-            "type": "fish",
-            "name": "小鱼",
-            "price": 10,
-            "props": [
+            "type": "fish", # 类型，必填，可用值：fish, item，同类型物品不能同时作为鱼饵
+            "name": "小鱼", # 名称，必填
+            "price": 15, # 基准价格，必填
+            "amount": 1, # 单份数量，模拟耐久
+            "props": [ # 属性，选填，作为鱼饵时改变
                 {
-                    "type": "rm_fish",
-                    "key": "小鱼"
+                    "type": "rm_fish", # 可用值: rare_fish, normal_fish, fish, rm_fish, special_fish, no_fish
+                    "key": "小鱼", # 如果为 fish 或 rm_fish，需要填写鱼名
+                    "value": 0 # 如果为 rare_fish, normal_fish, fish，填写权重；如果为 special_fish, no_fish，填写概率
                 }
             ],
-            "description": "一条小鱼。把它当做鱼饵可以防止钓到小鱼。",
-            "can_catch": True,
-            "frequency": 2,
-            "weight": 1000,
-            "can_buy": True,
-            "amount": 1,
-            "can_sell": True
+            "description": "一条小鱼。把它当做鱼饵可以防止钓到小鱼。", # 描述，必填
+            "can_catch": True, # 是否可以抓取，必填
+            "sleep_time": 2, # 钓上来需要的时间，默认 60
+            "weight": 1000, # 权重
+            "can_buy": True, # 是否可以购买，必填
+            "buy_price": 50, # 购买价格
+            "can_sell": True # 是否可以出售，必填
         },
         {
             "type": "item",
@@ -36,7 +38,7 @@ class Config(BaseModel):
             "props": [],
             "description": "假的。",
             "can_catch": True,
-            "frequency": 2,
+            "sleep_time": 2,
             "weight": 500,
             "can_buy": False,
             "can_sell": True,
@@ -48,7 +50,7 @@ class Config(BaseModel):
             "props": [],
             "description": "杂鱼，杂鱼~",
             "can_catch": True,
-            "frequency": 10,
+            "sleep_time": 10,
             "weight": 100,
             "can_buy": False,
             "can_sell": True
@@ -60,7 +62,7 @@ class Config(BaseModel):
             "props": [],
             "description": "河里为什么会有烤鱼？",
             "can_catch": True,
-            "frequency": 20,
+            "sleep_time": 20,
             "weight": 20,
             "can_buy": False,
             "can_sell": True
@@ -72,7 +74,7 @@ class Config(BaseModel):
             "props": [],
             "description": "邪恶的冰之精灵，是个笨蛋。",
             "can_catch": True,
-            "frequency": 60,
+            "sleep_time": 60,
             "weight": 20,
             "can_buy": False,
             "can_sell": True
@@ -84,7 +86,7 @@ class Config(BaseModel):
             "props": [],
             "description": "非常能吃大米。",
             "can_catch": True,
-            "frequency": 30,
+            "sleep_time": 30,
             "weight": 10,
             "can_buy": False,
             "can_sell": True
@@ -96,31 +98,73 @@ class Config(BaseModel):
             "props": [],
             "description": "Neet姬，非常难在图书馆外见到她。",
             "can_catch": True,
-            "frequency": 120,
+            "sleep_time": 120,
             "weight": 0,
             "can_buy": False,
             "can_sell": True
         },
         {
             "type": "item",
+            "name": "钢制鱼竿",
+            "price": 10,
+            "amount": 30,
+            "props": [
+                {
+                    "type": "rare_fish",
+                    "value": 5
+                },
+                {
+                    "type": "no_fish",
+                    "value": 0.05
+                }           
+            ],
+            "description": "升级的鱼竿，提升钓上大鱼的概率；但是因为偏重，容易空军。",
+            "can_catch": False,
+            "can_buy": True,
+            "can_sell": False
+        },
+        {
+            "type": "item",
             "name": "钛金鱼竿",
-            "price": 5,
+            "price": 20,
+            "amount": 20,
             "props": [
                 {
                     "type": "rare_fish",
                     "value": 10
-                }    
+                },
+                {
+                    "type": "no_fish",
+                    "value": -0.05
+                }           
             ],
             "description": "更坚韧的鱼竿，显著提升钓上大鱼的概率。",
             "can_catch": False,
             "can_buy": True,
-            "amount": 30,
+            "can_sell": False
+        },
+        {
+            "type": "item",
+            "name": "附魔鱼竿",
+            "price": 35,
+            "amount": 20,
+            "props": [
+                {
+                    "type": "normal_fish",
+                    "value": -250
+                }      
+            ],
+            "description": "附魔的鱼竿，大幅减少钓上垃圾的概率。",
+            "can_catch": True,
+            "sleep_time": 30,
+            "weight": 100,
+            "can_buy": False,
             "can_sell": False
         },
         {
             "type": "fish",
             "name": "大米",
-            "price": 2000,
+            "price": 700,
             "props": [
                 {
                     "type": "fish",
@@ -128,25 +172,52 @@ class Config(BaseModel):
                     "value": 10000
                 }    
             ],
-            "description": "Fufu 最爱吃的大米！这是管理员物品。",
+            "description": "Fufu 最爱吃的大米！",
+            "can_catch": False,
+            "can_buy": True,
+            "can_sell": False
+        },
+        {
+            "type": "fish",
+            "name": "棒棒糖",
+            "price": 50,
+            "props": [
+                {
+                    "type": "special_fish",
+                    "value": 0.5
+                },
+                {
+                    "type": "fish",
+                    "key": "帕秋莉",
+                    "value": 10
+                }
+            ],
+            "description": "可以吸引到一些奇怪的鱼。",
+            "can_catch": False,
+            "can_buy": True,
+            "can_sell": False
+        },
+        {
+            "type": "fish",
+            "name": "传奇棒棒糖",
+            "price": 200,
+            "props": [
+                {
+                    "type": "special_fish",
+                    "value": 1
+                },
+                {
+                    "type": "no_fish",
+                    "value": -1
+                }
+            ],
+            "description": "必定钓到特殊鱼。这是个管理员物品",
             "can_catch": False,
             "can_buy": False,
             "can_sell": False
         }
     ]
-
-    punish_limit: int = 3 
-
-    fishing_limit: int = 60
-
-    fishing_coin_name: str = "绿宝石"  # It means Fishing Coin.
-
-    special_fish_enabled: bool = True
-
-    special_fish_price: int = 200
-
-    special_fish_probability: float = 0.01
-
+    
     fishing_achievement: List[Dict] = [
         {
             "type": "fishing_frequency",
@@ -189,9 +260,43 @@ class Config(BaseModel):
             "name": "不动的大图书馆",
             "data": "帕秋莉",
             "description": "Neet 姬好不容易出门一次，就被你钓上来了？"
+        },
+        {
+            "type": "fish_type",
+            "name": "工欲善其事，必先利其器",
+            "data": "钛金鱼竿",
+            "description": "在钓鱼用具店购买钛金鱼竿"
+        },
+        {
+            "type": "fish_type",
+            "name": "为啥能钓上鱼竿？",
+            "data": "附魔鱼竿",
+            "description": "钓上附魔鱼竿"
         }
     ]
 
+    fishing_coin_name: str = "绿宝石"  # 货币名称
+    
+    fishing_limit: int = 60 # 每次钓鱼后，限制钓鱼的秒数
+    
+    punish_limit: int = 3 # 短时间多次钓鱼后，禁言所需次数，防止刷屏
+
+    special_fish_enabled: bool = False # 是否启用赛博放生 & 特殊鱼
+
+    special_fish_price: int = 200 # 特殊鱼出售的价格
+
+    special_fish_free_price: int = 100 # 特殊鱼放生的价格
+
+    special_fish_probability: float = 0.01 # 钓上特殊鱼的概率，注意这个判定在空军判定之后
+
+    no_fish_probability: float = 0.1 # 空军的概率
+    
+    rare_fish_weight: int = 500 # 稀有鱼权重分界线，影响 rare_fish 属性与 normal_fish 属性的区分
+    
+    buy_rate: float = 2.0 # 在不指定 buy_price 时，购买价格/基准价格比，应大于 1
+    
+    backpack_forward: bool = True # 背包是否使用聊天记录
+# fmt:on
 
 try:
     # pydantic v2
