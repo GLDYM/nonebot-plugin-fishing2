@@ -1,6 +1,6 @@
 [project]
 name = "nonebot-plugin-fishing2"
-version = "0.0.4"
+version = "0.1.0"
 description = "更好的电子钓鱼"
 authors = [
     {name = "ALittleBot", email = "160833462+C14H22O@users.noreply.github.com"},
@@ -12,7 +12,6 @@ dependencies = [
     "pydantic>=1.10",
     "nonebot-plugin-localstore>=0.6.0",
     "sqlalchemy>=2.0.27",
-    "aiosqlite>=0.20.0",
     "nonebot-plugin-orm>=0.7.1",
 ]
 readme = "README.md"
@@ -31,5 +30,4 @@ nonebot-adapter-onebot = ">=2.0.0-beta.1"
 pydantic = ">=1.10"
 nonebot-plugin-localstore = ">=0.6.0"
 sqlalchemy = ">=2.0.27"
-aiosqlite = ">=0.20.0"
 nonebot-plugin-orm = ">=0.7.1"

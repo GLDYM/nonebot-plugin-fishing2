@@ -39,21 +39,25 @@ from .data_source import (
     get_shop,
     buy_fish,
     predict,
-    get_all_special_fish,
+    get_pool,
 )
 from .fish_helper import fish_list, get_fish_by_name
 
 fishing_coin_name = config.fishing_coin_name
+cool_down = (
+    f"{config.fishing_cooldown_time_min}s~{config.fishing_cooldown_time_max}s"
+    if config.fishing_cooldown_time_min != config.fishing_cooldown_time_max
+    else f"{config.fishing_cooldown_time_min}s"
+)  # 浮动 CD 法力无边，有效遏制频繁钓鱼
 
 __plugin_meta__ = PluginMetadata(
     name="更好的电子钓鱼",
     description="赛博钓鱼……但是加强版本",
     usage=f"""▶ 查询 [物品]：查询某个物品的信息
 ▶ 钓鱼 [鱼竿] [鱼饵]：
-  ▷ 有 {config.fishing_limit}s 的冷却
-  ▷ {config.no_fish_probability} 概率空军，{config.special_fish_probability} 概率掉到特殊鱼
+  ▷ 钓鱼后有 {cool_down} 的冷却，频繁钓鱼会触怒河神
+  ▷ {config.no_fish_probability} 概率空军，{config.special_fish_probability} 概率钓到特殊鱼
   ▷ 加参数可以使用鱼饵或鱼竿，同类物品同时只能使用一种 
-  ▷ 频繁钓鱼会触怒河神
 ▶ 出售 <物品> <数量>：出售物品获得{fishing_coin_name}
   ▷ 如果卖不出去，尝试用英文双引号框住鱼名
 ▶ 购买 <物品> <份数>：购买渔具店的物品
@@ -69,7 +73,7 @@ __plugin_meta__ = PluginMetadata(
     homepage="https://github.com/FDCraft/nonebot-plugin-fishing2",
     config=Config,
     supported_adapters={"~onebot.v11"},
-    extra={"author": "Polaris_Light", "version": "0.0.4", "priority": 5},
+    extra={"author": "Polaris_Light", "version": "0.1.0", "priority": 5},
 )
 
 
@@ -127,7 +131,9 @@ async def _(
         )
     elif arg not in fish_list:
         await fishing_lookup.finish(MessageSegment.at(user_id) + " 查无此鱼。")
-    await forward_send(bot, event, get_fish_by_name(arg).print_info())
+
+    messages = get_fish_by_name(arg).print_info()
+    await forward_send(bot, event, messages)
     return None
 
 
@@ -160,6 +166,7 @@ async def _(bot: Bot, event: Event, matcher: Matcher, arg: Message = CommandArg(
             for achievement in achievements:
                 await fishing.send(achievement)
     except Exception as e:
+        result = "河神睡着了……"
         logger.error(e)
     finally:
         block_user_list.remove(user_id)
@@ -199,29 +206,9 @@ async def _(bot: Bot, event: Union[GroupMessageEvent, PrivateMessageEvent]):
     if not is_superuser and not is_self:
         return None
 
-    message: list[MessageSegment] = []
-    pool = await get_all_special_fish()
-    message.append(MessageSegment.text(f"现在鱼池里面有 {len(pool)} 条鱼。"))
+    messages: list[MessageSegment] = await get_pool()
 
-    result = dict()
-    for fish in pool:
-        try:
-            result[fish] += 1
-        except KeyError:
-            result[fish] = 1
-
-    msg = "鱼池列表：\n"
-    for fish, num in result.items():
-        if len(msg) > 300:
-            msg += f"{fish} x {num}"
-            message.append(MessageSegment.text(msg))
-            msg = ""
-        else:
-            msg += f"{fish} x {num}\n"
-    else:
-        message.append(MessageSegment.text(msg))
-
-    await forward_send(bot, event, message)
+    await forward_send(bot, event, messages)
     return None
 
 
@@ -239,13 +226,13 @@ async def _(bot: Bot, event: Union[GroupMessageEvent, PrivateMessageEvent]):
             + "\n\n".join(await get_backpack(user_id))
         )
     else:
-        message: list[MessageSegment] = []
-        message.append(MessageSegment.at(user_id))
-        message.append(await get_stats(user_id))
-        message.append(await get_balance(user_id))
+        messages: list[MessageSegment] = []
+        messages.append(MessageSegment.at(user_id))
+        messages.append(await get_stats(user_id))
+        messages.append(await get_balance(user_id))
         backpacks = await get_backpack(user_id)
-        message += [MessageSegment.text(msg) for msg in backpacks]
-        await forward_send(bot, event, message)
+        messages += [MessageSegment.text(msg) for msg in backpacks]
+        await forward_send(bot, event, messages)
 
 
 @buy.handle()
@@ -303,7 +290,13 @@ async def _(bot: Bot, event: Event, arg: Message = CommandArg()):
     fish_name = arg.extract_plain_text()
     user_id = event.get_user_id()
 
-    if '"' in fish_name:
+    if (
+        "\u200b" in fish_name
+        or "\u200c" in fish_name
+        or "\u200d" in fish_name
+        or "\u2060" in fish_name
+        or "\ufeff" in fish_name
+    ):
         if isinstance(event, GroupMessageEvent):
             group_id = event.group_id
             await bot.set_group_ban(group_id=group_id, user_id=user_id, duration=1800)
@@ -327,7 +320,7 @@ async def _(bot: Bot, event: Event, matcher: Matcher):
         await punish(bot, event, matcher, user_id)
         result = await lottery(user_id)
     except:
-        pass
+        result = "河神睡着了……"
     finally:
         punish_user_dict.pop(user_id, None)
     await lottery_cmd.finish(MessageSegment.at(user_id) + " " + result)

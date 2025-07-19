@@ -67,21 +67,22 @@ _✨ 更好的电子钓鱼 ✨_
 
 在 nonebot2 项目的`.env`文件中添加下表中的配置
 
-| 配置项                   | 必填 | 说明                                                           |
-|:------------------------:|:----:|:--------------------------------------------------------------:|
-| fishes                   | 否   | 配置鱼塘内的普通鱼（大概是鱼……）                               |
-| fishing_achievement      | 否   | 配置钓鱼成就                                                   |
-| fishing_coin_name        | 否   | 填入卖鱼获取的货币名称                                         |
-| fishing_limit            | 否   | 填入每次钓鱼后，限制钓鱼的秒数                                 |
-| punish_limit             | 否   | 短时间多次钓鱼后，禁言所需次数，防止刷屏                       |
-| special_fish_enabled     | 否   | 是否启用赛博放生 & 特殊鱼（默认为否）                          |
-| special_fish_price       | 否   | 特殊鱼出售的价格                                               |
-| special_fish_free_price  | 否   | 特殊鱼放生的价格                                               |
-| special_fish_probability | 否   | 钓上特殊鱼的概率，注意这个判定在空军判定之后                   |
-| no_fish_probability      | 否   | 空军的概率                                                     |
-| rare_fish_weight         | 否   | 稀有鱼权重分界线，影响 rare_fish 属性与 normal_fish 属性的区分 |
-| buy_rate                 | 否   | 在不指定 buy_price 时，购买价格/基准价格比，应大于 1           |
-| backpack_forward         | 否   | 背包是否使用聊天记录                                           |
+| 配置项                    | 必填 | 说明                                                           |
+|:-------------------------:|:----:|:--------------------------------------------------------------:|
+| fishes                    | 否   | 鱼塘内的普通鱼（大概是鱼……）                                   |
+| fishing_achievement       | 否   | 钓鱼成就                                                       |
+| fishing_coin_name         | 否   | 卖鱼获取的货币名称                                             |
+| fishing_cooldown_time_min | 否   | 钓鱼冷却下限，单位为秒                                         |
+| fishing_cooldown_time_max | 否   | 钓鱼冷却上限                                                   |
+| punish_limit              | 否   | 短时间多次钓鱼后，禁言所需次数，防止刷屏                       |
+| special_fish_enabled      | 否   | 是否启用赛博放生 & 特殊鱼（默认为否）                          |
+| special_fish_price        | 否   | 特殊鱼出售的价格                                               |
+| special_fish_free_price   | 否   | 特殊鱼放生的价格                                               |
+| special_fish_probability  | 否   | 钓上特殊鱼的概率，注意这个判定在空军判定之后                   |
+| no_fish_probability       | 否   | 空军的概率                                                     |
+| rare_fish_weight          | 否   | 稀有鱼权重分界线，影响 rare_fish 属性与 normal_fish 属性的区分 |
+| buy_rate                  | 否   | 在不指定 buy_price 时，购买价格/基准价格比，应大于 1           |
+| backpack_forward          | 否   | 背包是否使用聊天记录                                           |
 
 其中 `fishes` 配置项说明如下。预设配置经过了计算以平衡，如果需要自行填表，请使用“钓鱼预测”命令进行预测。
 

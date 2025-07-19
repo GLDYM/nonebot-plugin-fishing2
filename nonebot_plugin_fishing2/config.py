@@ -1,12 +1,8 @@
 from pydantic import BaseModel
 from typing import List, Dict
 
-try:
-    # pydantic v2
-    from nonebot import get_plugin_config
-except ImportError:
-    # pydantic v1
-    from nonebot import get_driver
+from nonebot import get_plugin_config
+
 
 # fmt:off
 class Config(BaseModel):
@@ -126,7 +122,7 @@ class Config(BaseModel):
         {
             "type": "item",
             "name": "钛金鱼竿",
-            "price": 20,
+            "price": 40,
             "amount": 20,
             "props": [
                 {
@@ -141,12 +137,13 @@ class Config(BaseModel):
             "description": "更坚韧的鱼竿，显著提升钓上大鱼的概率。",
             "can_catch": False,
             "can_buy": True,
+            "buy_price": 40,
             "can_sell": False
         },
         {
             "type": "item",
             "name": "附魔鱼竿",
-            "price": 35,
+            "price": 20,
             "amount": 20,
             "props": [
                 {
@@ -157,7 +154,7 @@ class Config(BaseModel):
             "description": "附魔的鱼竿，大幅减少钓上垃圾的概率。",
             "can_catch": True,
             "sleep_time": 30,
-            "weight": 100,
+            "weight": 40,
             "can_buy": False,
             "can_sell": False
         },
@@ -211,7 +208,7 @@ class Config(BaseModel):
                     "value": -1
                 }
             ],
-            "description": "必定钓到特殊鱼。这是个管理员物品",
+            "description": "必定钓到特殊鱼。",
             "can_catch": False,
             "can_buy": False,
             "can_sell": False
@@ -277,7 +274,9 @@ class Config(BaseModel):
 
     fishing_coin_name: str = "绿宝石"  # 货币名称
     
-    fishing_limit: int = 60 # 每次钓鱼后，限制钓鱼的秒数
+    fishing_cooldown_time_min: int = 60 # 钓鱼冷却下限，单位为秒
+    
+    fishing_cooldown_time_max: int = 90 # 钓鱼冷却上限
     
     punish_limit: int = 3 # 短时间多次钓鱼后，禁言所需次数，防止刷屏
 
@@ -298,9 +297,5 @@ class Config(BaseModel):
     backpack_forward: bool = True # 背包是否使用聊天记录
 # fmt:on
 
-try:
-    # pydantic v2
-    config = get_plugin_config(Config)
-except:
-    # pydantic v1
-    config = Config.parse_obj(get_driver().config)
+config = get_plugin_config(Config)
+

@@ -227,15 +227,6 @@ async def random_get_a_special_fish() -> str:
         return data.fish
 
 
-async def get_all_special_fish() -> list[str]:
-    session = get_session()
-    async with session.begin():
-        random_select = select(SpecialFishes.fish).order_by(SpecialFishes.fish.asc())
-        data = await session.scalars(random_select)
-        result = data.all()
-        return result
-
-
 async def check_achievement(user_id: str) -> str | None:
     session = get_session()
     async with session.begin():
@@ -309,7 +300,9 @@ async def save_achievement(user_id: str, achievement_name: str):
 
 async def save_fish(user_id: str, fish_name: str) -> None:
     time_now = int(time.time())
-    fishing_limit = config.fishing_limit
+    fishing_cooldown = random.randint(
+        config.fishing_cooldown_time_min, config.fishing_cooldown_time_max
+    )
     amount = get_fish_by_name(fish_name).amount
     session = get_session()
     async with session.begin():
@@ -327,7 +320,7 @@ async def save_fish(user_id: str, fish_name: str) -> None:
                 update(FishingRecord)
                 .where(FishingRecord.user_id == user_id)
                 .values(
-                    time=time_now + fishing_limit,
+                    time=time_now + fishing_cooldown,
                     frequency=new_frequency,
                     fishes=dump_fishes,
                 )
@@ -339,7 +332,7 @@ async def save_fish(user_id: str, fish_name: str) -> None:
         dump_fishes = json.dumps(data)
         new_record = FishingRecord(
             user_id=user_id,
-            time=time_now + fishing_limit,
+            time=time_now + fishing_cooldown,
             frequency=1,
             fishes=dump_fishes,
             special_fishes="{}",
@@ -352,7 +345,9 @@ async def save_fish(user_id: str, fish_name: str) -> None:
 
 async def save_special_fish(user_id: str, fish_name: str) -> None:
     time_now = int(time.time())
-    fishing_limit = config.fishing_limit
+    fishing_cooldown = random.randint(
+        config.fishing_cooldown_time_min, config.fishing_cooldown_time_max
+    )
     session = get_session()
     async with session.begin():
         select_user = select(FishingRecord).where(FishingRecord.user_id == user_id)
@@ -368,7 +363,7 @@ async def save_special_fish(user_id: str, fish_name: str) -> None:
                 update(FishingRecord)
                 .where(FishingRecord.user_id == user_id)
                 .values(
-                    time=time_now + fishing_limit,
+                    time=time_now + fishing_cooldown,
                     frequency=record.frequency + 1,
                     special_fishes=dump_fishes,
                 )
@@ -379,7 +374,7 @@ async def save_special_fish(user_id: str, fish_name: str) -> None:
             dump_fishes = json.dumps(data)
             new_record = FishingRecord(
                 user_id=user_id,
-                time=time_now + fishing_limit,
+                time=time_now + fishing_cooldown,
                 frequency=1,
                 fishes="{}",
                 special_fishes=dump_fishes,
@@ -549,7 +544,9 @@ async def lottery(user_id: str) -> str:
     """算法来自于 https://github.com/fossifer/minesweeperbot/blob/master/cards.py"""
     session = get_session()
     time_now = int(time.time())
-    fishing_limit = config.fishing_limit
+    fishing_cooldown = random.randint(
+        config.fishing_cooldown_time_min, config.fishing_cooldown_time_max
+    )
     async with session.begin():
         select_user = select(FishingRecord).where(FishingRecord.user_id == user_id)
         fishes_record = await session.scalar(select_user)
@@ -561,7 +558,7 @@ async def lottery(user_id: str) -> str:
                     update(FishingRecord)
                     .where(FishingRecord.user_id == user_id)
                     .values(
-                        time=time_now + fishing_limit,
+                        time=time_now + fishing_cooldown,
                         coin=fishes_record.coin + new_coin,
                     )
                 )
@@ -576,7 +573,7 @@ async def lottery(user_id: str) -> str:
                 update(FishingRecord)
                 .where(FishingRecord.user_id == user_id)
                 .values(
-                    time=time_now + fishing_limit,
+                    time=time_now + fishing_cooldown,
                     coin=fishes_record.coin + new_coin,
                 )
             )
@@ -636,6 +633,42 @@ async def give(user_id: str, fish_name: str, quantity: int = 1) -> str:
                 f"使用滥权之力成功将 {fish_name} 添加到 {user_id} 的背包之中 ヾ(≧▽≦*)o"
             )
         return "未查找到用户信息, 无法执行滥权操作 w(ﾟДﾟ)w"
+
+
+async def get_all_special_fish() -> list[str]:
+    session = get_session()
+    async with session.begin():
+        random_select = select(SpecialFishes.fish).order_by(SpecialFishes.fish.asc())
+        data = await session.scalars(random_select)
+        result = data.all()
+        return result
+
+
+async def get_pool() -> list[MessageSegment]:
+
+    messages: list[MessageSegment] = []
+    pool = await get_all_special_fish()
+    messages.append(MessageSegment.text(f"现在鱼池里面有 {len(pool)} 条鱼。"))
+
+    result = dict()
+    for fish in pool:
+        try:
+            result[fish] += 1
+        except KeyError:
+            result[fish] = 1
+
+    msg = "鱼池列表：\n"
+    for fish, num in result.items():
+        if len(msg) > 300:
+            msg += f"{fish} x {num}"
+            messages.append(MessageSegment.text(msg))
+            msg = ""
+        else:
+            msg += f"{fish} x {num}\n"
+    else:
+        messages.append(MessageSegment.text(msg))
+
+    return messages
 
 
 async def get_stats(user_id: str) -> str:
