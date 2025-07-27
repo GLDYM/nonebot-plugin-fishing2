@@ -1,10 +1,6 @@
 <div align="center">
-  <a href="https://v2.nonebot.dev/store"><img src="https://github.com/A-kirami/nonebot-plugin-template/blob/resources/nbp_logo.png" width="180" height="180" alt="NoneBotPluginLogo"></a>
-  <br>
-  <p><img src="https://github.com/A-kirami/nonebot-plugin-template/blob/resources/NoneBotPlugin.svg" width="240" alt="NoneBotPluginText"></p>
-</div>
-
-<div align="center">
+    <a href="https://v2.nonebot.dev/store">
+    <img src="https://raw.githubusercontent.com/fllesser/nonebot-plugin-template/refs/heads/resource/.docs/NoneBotPlugin.svg" width="310" alt="logo"></a>
 
 # nonebot-plugin-fishing2
 
@@ -121,14 +117,7 @@ FISHES='
 
 ### 指令表
 
-在群聊或私聊发送“钓鱼帮助”查看本插件的帮助，或者使用[NoneBot-Plugin-PicMenu-Next](https://github.com/lgc-NB2Dev/nonebot-plugin-picmenu-next)等帮助插件查看。
-
-### 管理员指令表
-
-| 指令     | 范围 | 说明                                           |
-|:--------:|:----:|:----------------------------------------------:|
-| 钓鱼预测 | 所有 | 对钓鱼进行模拟，查看各鱼的概率与期望，便于填表 |
-| 鱼池     | 所有 | 查看数据库里面的所有特殊鱼                     |
+在群聊或私聊发送“钓鱼帮助”查看本插件的帮助，或者使用[NoneBot-Plugin-PicMenu-Next](https://github.com/lgc-NB2Dev/nonebot-plugin-picmenu-next)等帮助插件查看。管理员指令默认隐藏，只能由 SUPERUSER 发送“钓鱼帮助”查看。
 
 ### 赛博放生
 
@@ -144,6 +133,6 @@ FISHES='
 - [x] 为钓鱼背包添加排序
 - [x] 添加成就系统
 - [x] 买装备！
-- [ ] 支持卖与普通鱼同名的特殊鱼
-- [ ] 管理员命令：捞鱼
+- [x] 支持卖与普通鱼同名的特殊鱼
+- [x] 管理员命令：捞鱼
 - [ ] 屏蔽词库

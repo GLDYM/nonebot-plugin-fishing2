@@ -4,7 +4,7 @@ import random
 import time
 import json
 
-from typing import Union
+from collections.abc import Hashable
 from sqlalchemy import select, update, delete
 from sqlalchemy.sql.expression import func
 from nonebot.adapters.onebot.v11 import MessageSegment
@@ -13,6 +13,23 @@ from nonebot_plugin_orm import get_session
 from .config import config
 from .model import FishingRecord, SpecialFishes
 from .fish_helper import *
+
+
+def get_key_by_index(
+    dict: dict, index: int, default: Hashable | None = None
+) -> Hashable | None:
+    """Utils: get the key of OrderedDict by index.
+
+    Args:
+        dict (dict)
+        index (int)
+        default (Hashable | None, optional): default value. Defaults to None.
+
+    Returns:
+        Hashable | None: a key of dict.
+    """
+    key_list = list(dict.keys())
+    return key_list[index] if index < len(key_list) else default
 
 
 async def can_fishing(user_id: str) -> bool:
@@ -395,17 +412,44 @@ async def save_special_fish(user_id: str, fish_name: str) -> None:
         await session.commit()
 
 
-async def sell_fish(user_id: str, fish_name: str, quantity: int = 1) -> str:
+async def sell_fish(
+    user_id: str,
+    name_or_index: str,
+    quantity: int = 1,
+    as_index: bool = False,
+    as_special: bool = False,
+) -> str:
     if quantity <= 0:
         return "你在卖什么 w(ﾟДﾟ)w"
+
     session = get_session()
     async with session.begin():
         select_user = select(FishingRecord).where(FishingRecord.user_id == user_id)
         fishes_record = await session.scalar(select_user)
         if fishes_record := fishes_record:
             loads_fishes = json.loads(fishes_record.fishes)
+            loads_fishes = {
+                key: loads_fishes[key] for key in fish_list if key in loads_fishes
+            }
+
             spec_fishes = json.loads(fishes_record.special_fishes)
-            if fish_name in loads_fishes and loads_fishes[fish_name] > 0:
+            spec_fishes = dict(sorted(spec_fishes.items()))
+
+            if as_index:
+                if not name_or_index.isdigit():
+                    return "你完全不看帮助是吗 ￣へ￣"
+                load_dict = loads_fishes if not as_special else spec_fishes
+                fish_name = get_key_by_index(load_dict, int(name_or_index))
+                if not fish_name:
+                    return "查无此鱼"
+            else:
+                fish_name = name_or_index
+
+            if (
+                not as_special
+                and fish_name in loads_fishes
+                and loads_fishes[fish_name] > 0
+            ):
                 if fish_name not in can_sell_fishes:
                     return f"这个 {fish_name} 不可以卖哦~"
                 if loads_fishes[fish_name] < quantity:
@@ -425,6 +469,7 @@ async def sell_fish(user_id: str, fish_name: str, quantity: int = 1) -> str:
                 )
                 await session.execute(user_update)
                 await session.commit()
+
                 return (
                     f"你以 {fish_price} {fishing_coin_name} / 条的价格卖出了 {quantity} 条 {fish_name}, "
                     f"你获得了 {fish_price * quantity} {fishing_coin_name}"
@@ -584,13 +629,20 @@ async def lottery(user_id: str) -> str:
             return "河神没有回应你……"
 
 
-async def give(user_id: str, fish_name: str, quantity: int = 1) -> str:
+async def give(
+    user_id: str,
+    name_or_index: str,
+    quantity: int = 1,
+    as_index: bool = False,
+    as_special: bool = False,
+) -> str:
     session = get_session()
     async with session.begin():
         select_user = select(FishingRecord).where(FishingRecord.user_id == user_id)
         record = await session.scalar(select_user)
         if record:
-            if fish_name == "coin" or fish_name == fishing_coin_name:
+
+            if name_or_index == "coin" or name_or_index == fishing_coin_name:
                 user_update = (
                     update(FishingRecord)
                     .where(FishingRecord.user_id == user_id)
@@ -601,13 +653,27 @@ async def give(user_id: str, fish_name: str, quantity: int = 1) -> str:
                 await session.execute(user_update)
                 await session.commit()
                 return f"使用滥权之力成功为 {user_id} {"增加" if quantity >= 0 else "减少"} {abs(quantity)} {fishing_coin_name} ヾ(≧▽≦*)o"
+
             loads_fishes = json.loads(record.fishes)
             spec_fishes = json.loads(record.special_fishes)
-            if fish_name in fish_list:
+
+            if as_index:
+                if not name_or_index.isdigit():
+                    return "你完全不看帮助是吗 ￣へ￣"
+                load_dict = loads_fishes if not as_special else spec_fishes
+                fish_name = get_key_by_index(load_dict, int(name_or_index))
+                if not fish_name:
+                    return "查无此鱼，你再看看这人背包呢？"
+            else:
+                fish_name = name_or_index
+
+            if not as_special and fish_name in fish_list:
                 try:
                     loads_fishes[fish_name] += quantity
                 except KeyError:
                     loads_fishes[fish_name] = quantity
+                if loads_fishes[fish_name] <= 0:
+                    del loads_fishes[fish_name]
                 dump_fishes = json.dumps(loads_fishes)
                 user_update = (
                     update(FishingRecord)
@@ -621,6 +687,8 @@ async def give(user_id: str, fish_name: str, quantity: int = 1) -> str:
                     spec_fishes[fish_name] += quantity
                 except KeyError:
                     spec_fishes[fish_name] = quantity
+                if spec_fishes[fish_name] <= 0:
+                    del spec_fishes[fish_name]
                 dump_fishes = json.dumps(spec_fishes)
                 user_update = (
                     update(FishingRecord)
@@ -629,26 +697,24 @@ async def give(user_id: str, fish_name: str, quantity: int = 1) -> str:
                 )
                 await session.execute(user_update)
                 await session.commit()
+            
+            fish_name = (
+                fish_name[:20] + "..." + str(len(fish_name) - 20)
+                if len(fish_name) > 20
+                else fish_name
+            )
             return (
-                f"使用滥权之力成功将 {fish_name} 添加到 {user_id} 的背包之中 ヾ(≧▽≦*)o"
+                f"使用滥权之力成功为 {user_id} {"增加" if quantity >= 0 else "减少"} {abs(quantity)} 条 {fish_name} ヾ(≧▽≦*)o"
             )
         return "未查找到用户信息, 无法执行滥权操作 w(ﾟДﾟ)w"
 
 
-async def get_all_special_fish() -> list[str]:
+async def get_all_special_fish() -> dict[str, int]:
     session = get_session()
     async with session.begin():
         random_select = select(SpecialFishes.fish).order_by(SpecialFishes.fish.asc())
         data = await session.scalars(random_select)
-        result = data.all()
-        return result
-
-
-async def get_pool() -> list[MessageSegment]:
-
-    messages: list[MessageSegment] = []
-    pool = await get_all_special_fish()
-    messages.append(MessageSegment.text(f"现在鱼池里面有 {len(pool)} 条鱼。"))
+        pool = data.all()
 
     result = dict()
     for fish in pool:
@@ -657,14 +723,65 @@ async def get_pool() -> list[MessageSegment]:
         except KeyError:
             result[fish] = 1
 
+    return result
+
+
+async def remove_special_fish(name_or_index: str, as_index: bool = False) -> str | None:
+    pool = await get_all_special_fish()
+
+    if as_index:
+        if not name_or_index.isdigit():
+            return "你完全不看帮助是吗 ￣へ￣"
+        fish_name = get_key_by_index(pool, int(name_or_index))
+        if not fish_name:
+            return "查无此鱼"
+    else:
+        fish_name = name_or_index
+        if fish_name not in pool:
+            return "查无此鱼"
+
+    session = get_session()
+    async with session.begin():
+        delete_fishes = delete(SpecialFishes).where(SpecialFishes.fish == fish_name)
+        await session.execute(delete_fishes)
+        await session.commit()
+        
+    fish_name = (
+        fish_name[:20] + "..." + str(len(fish_name) - 20)
+        if len(fish_name) > 20
+        else fish_name
+    )
+
+    return f"已成功捞出 {fish_name}"
+
+
+async def get_pool(name_limit: int = 30, page_limit: int = 200) -> list[MessageSegment]:
+    messages: list[MessageSegment] = []
+    pool = await get_all_special_fish()
+    messages.append(
+        MessageSegment.text(f"现在鱼池里面有 {sum(list(pool.values()))} 条鱼。")
+    )
+
     msg = "鱼池列表：\n"
-    for fish, num in result.items():
-        if len(msg) > 300:
-            msg += f"{fish} x {num}"
+    i = 0
+    j = 1
+    for fish, num in pool.items():
+        if len(msg) > page_limit:
+            fish = (
+                fish[:name_limit] + "..." + str(len(fish) - name_limit)
+                if len(fish) > name_limit
+                else fish
+            )
+            msg += f"{i}. {fish} x {num}\n"
+            msg += f"【第 {j} 页结束】"
             messages.append(MessageSegment.text(msg))
             msg = ""
+            i += 1
+            j += 1
         else:
-            msg += f"{fish} x {num}\n"
+            fish = fish[:name_limit] + "..." if len(fish) > name_limit else fish
+            msg += f"{i}. {fish} x {num}\n"
+            i += 1
     else:
         messages.append(MessageSegment.text(msg))
 
@@ -697,33 +814,35 @@ async def get_backpack(user_id: str) -> list[str]:
         select_user = select(FishingRecord).where(FishingRecord.user_id == user_id)
         fishes_record = await session.scalar(select_user)
         if fishes_record:
-            load_fishes = json.loads(fishes_record.fishes)
-            sorted_fishes = {
-                key: load_fishes[key] for key in fish_list if key in load_fishes
+            loads_fishes = json.loads(fishes_record.fishes)
+            loads_fishes = {
+                key: loads_fishes[key] for key in fish_list if key in loads_fishes
             }
-            load_special_fishes = json.loads(fishes_record.special_fishes)
-            if load_special_fishes:
-                sorted_special_fishes = {
-                    key: load_special_fishes[key] for key in sorted(load_special_fishes)
-                }
-                return print_backpack(sorted_fishes, sorted_special_fishes)
+            spec_fishes: dict = json.loads(fishes_record.special_fishes)
+            if spec_fishes:
+                spec_fishes = dict(sorted(spec_fishes.items()))
+                return print_backpack(loads_fishes, spec_fishes)
             return (
                 ["🎒你的背包里空无一物"]
-                if sorted_fishes == {}
-                else print_backpack(sorted_fishes)
+                if loads_fishes == {}
+                else print_backpack(loads_fishes)
             )
         return ["🎒你的背包里空无一物"]
 
 
-def print_backpack(backpack: dict, special_backpack=None) -> list[str]:
-    result = [
-        f"{fish_name}×{str(quantity)}" for fish_name, quantity in backpack.items()
-    ]
+def print_backpack(backpack: dict, special_backpack: dict = None) -> list[str]:
+    i = 0
+    result = []
+    for fish_name, quantity in backpack.items():
+        result.append(f"{i}. {fish_name}×{str(quantity)}")
+        i += 1
+
     if special_backpack:
-        special_result = [
-            f"{fish_name}×{str(quantity)}"
-            for fish_name, quantity in special_backpack.items()
-        ]
+        i = 0
+        special_result: list[str] = []
+        for fish_name, quantity in special_backpack.items():
+            special_result.append(f"{i}. {fish_name}×{str(quantity)}")
+            i += 1
         return [
             "🎒普通鱼:\n" + "\n".join(result),
             "🎒特殊鱼:\n" + "\n".join(special_result),

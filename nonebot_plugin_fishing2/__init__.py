@@ -2,6 +2,7 @@ from nonebot import require
 
 require("nonebot_plugin_orm")  # noqa
 
+import copy
 import shlex
 from typing import Union
 
@@ -40,6 +41,7 @@ from .data_source import (
     buy_fish,
     predict,
     get_pool,
+    remove_special_fish,
 )
 from .fish_helper import fish_list, get_fish_by_name
 
@@ -53,27 +55,28 @@ cool_down = (
 __plugin_meta__ = PluginMetadata(
     name="更好的电子钓鱼",
     description="赛博钓鱼……但是加强版本",
-    usage=f"""▶ 查询 [物品]：查询某个物品的信息
+    usage=f"""▶ 钓鱼帮助：打印本信息
+▶ 查询 [物品]：查询某个物品的信息
 ▶ 钓鱼 [鱼竿] [鱼饵]：
   ▷ 钓鱼后有 {cool_down} 的冷却，频繁钓鱼会触怒河神
   ▷ {config.no_fish_probability} 概率空军，{config.special_fish_probability} 概率钓到特殊鱼
   ▷ 加参数可以使用鱼饵或鱼竿，同类物品同时只能使用一种 
-▶ 出售 <物品> <数量>：出售物品获得{fishing_coin_name}
-  ▷ 如果卖不出去，尝试用英文双引号框住鱼名
-▶ 购买 <物品> <份数>：购买渔具店的物品
+▶ 出售 [-i] [-s] <物品或序号> [数量]：出售物品获得{fishing_coin_name}
+  ▷ -i 按照序号卖鱼 -s 卖特殊鱼
+▶ 购买 <物品> [份数]：购买物品
 ▶ 放生 <鱼名>：给一条鱼取名并放生
   ▷ 不要放生奇怪名字的鱼
 ▶ 商店：看看渔具店都有些啥
-▶ 祈愿：向神祈愿，随机获取/损失{fishing_coin_name}
+▶ 祈愿：向神祈愿{fishing_coin_name}
 ▶ 背包：查看背包中的{fishing_coin_name}与物品
 ▶ 成就：查看拥有的成就
 ▶ 钓鱼排行榜：查看{fishing_coin_name}排行榜
 """,
     type="application",
-    homepage="https://github.com/FDCraft/nonebot-plugin-fishing2",
+    homepage="https://github.com/GLDYM/nonebot-plugin-fishing2",
     config=Config,
     supported_adapters={"~onebot.v11"},
-    extra={"author": "Polaris_Light", "version": "0.1.0", "priority": 5},
+    extra={"author": "Polaris_Light", "version": "0.1.1", "priority": 5},
 )
 
 
@@ -91,18 +94,36 @@ sell = on_command("sell", aliases={"卖鱼", "出售", "售卖"}, force_whitespa
 free_fish_cmd = on_command("free_fish", aliases={"放生", "钓鱼放生"}, force_whitespace=True, priority=5)
 lottery_cmd = on_command("lottery", aliases={"祈愿"}, force_whitespace=True, priority=5)
 achievement_cmd = on_command("achievement", aliases={"成就", "钓鱼成就"}, force_whitespace=True, priority=5)
-give_cmd = on_command("give", aliases={"赐予"}, force_whitespace=True, priority=5)
 board_cmd = on_command("board", aliases={"排行榜", "钓鱼排行榜"}, force_whitespace=True, priority=5)
 
 # hidden cmd
+give_cmd = on_command("give", aliases={"赐予"}, force_whitespace=True, priority=5)
 predict_cmd = on_command("predict", aliases={"钓鱼预测"}, force_whitespace=True, priority=5)
 pool_cmd = on_command("pool", aliases={"鱼池"}, force_whitespace=True, priority=5)
+remove_cmd = on_command("remove", aliases={"捞鱼"}, force_whitespace=True, priority=5)
 # fmt:on
 
 
 @fishing_help.handle()
-async def _():
-    await fishing_help.finish(__plugin_meta__.usage)
+async def _(bot: Bot, event: Union[GroupMessageEvent, PrivateMessageEvent]):
+    user_id = event.get_user_id()
+    is_superuser = str(user_id) in bot.config.superusers
+    is_self = event.self_id == user_id
+
+    if not is_superuser and not is_self:
+        await fishing_help.finish(__plugin_meta__.usage)
+    else:
+        messages: list[MessageSegment] = []
+        messages.append(MessageSegment.text(__plugin_meta__.usage))
+        message2 = """以下为管理员命令：
+▶ 背包 [QQ或at]：让我看看
+▶ 赐予 [-i] [-s] <QQ或at> <物品或序号> [数量]：神秘力量
+▶ 钓鱼预测 [鱼竿] [鱼饵]：预测钓鱼
+▶ 鱼池 [鱼名长度最大值] [单页长度最大值]：查看所有特殊鱼
+▶ 捞鱼 [-i] <物品或序号>：捞出鱼池内特殊鱼
+"""
+        messages.append(MessageSegment.text(message2))
+        await forward_send(bot, event, messages)
 
 
 @shop.handle()
@@ -138,14 +159,19 @@ async def _(
 
 
 @fishing.handle()
-async def _(bot: Bot, event: Event, matcher: Matcher, arg: Message = CommandArg()):
+async def _(
+    bot: Bot,
+    event: Union[GroupMessageEvent, PrivateMessageEvent],
+    matcher: Matcher,
+    arg: Message = CommandArg(),
+):
     user_id = event.get_user_id()
     if user_id in block_user_list:
         await fishing.finish()
 
     tools = shlex.split((arg.extract_plain_text()))[:2]
 
-    logger.debug(f"Fishing: {user_id} try to use {tools}")
+    logger.info(f"Fishing: {user_id} try to use {tools}")
 
     check_result = await check_tools(user_id, tools)
     if check_result:
@@ -199,26 +225,85 @@ async def _(
 
 
 @pool_cmd.handle()
-async def _(bot: Bot, event: Union[GroupMessageEvent, PrivateMessageEvent]):
+async def _(
+    bot: Bot,
+    event: Union[GroupMessageEvent, PrivateMessageEvent],
+    arg: Message = CommandArg(),
+):
     user_id = event.get_user_id()
     is_superuser = str(user_id) in bot.config.superusers
     is_self = event.self_id == user_id
     if not is_superuser and not is_self:
         return None
 
-    messages: list[MessageSegment] = await get_pool()
+    args = shlex.split(arg.extract_plain_text())
+
+    match len(args):
+        case 0:
+            messages = await get_pool()
+        case 1:
+            if not args[0].isdigit():
+                await pool_cmd.finish(MessageSegment.text("你完全不看帮助是吗 ￣へ￣"))
+            messages = await get_pool(int(args[0]))
+        case 2:
+            if not args[0].isdigit() or not args[1].isdigit():
+                await pool_cmd.finish(MessageSegment.text("你完全不看帮助是吗 ￣へ￣"))
+            messages = await get_pool(int(args[0]), int(args[1]))
 
     await forward_send(bot, event, messages)
     return None
 
 
-@backpack.handle()
-async def _(bot: Bot, event: Union[GroupMessageEvent, PrivateMessageEvent]):
+@remove_cmd.handle()
+async def _(
+    bot: Bot,
+    event: Union[GroupMessageEvent, PrivateMessageEvent],
+    arg: Message = CommandArg(),
+):
     user_id = event.get_user_id()
+    is_superuser = str(user_id) in bot.config.superusers
+    is_self = event.self_id == user_id
+    if not is_superuser and not is_self:
+        return None
+
+    args = shlex.split(arg.extract_plain_text())
+    as_index = False
+    for arg in copy.deepcopy(args):
+        if arg in ["-i", "--index"]:
+            as_index = True
+            args.remove(arg)
+
+    name_or_index = args[0]
+    result = await remove_special_fish(name_or_index, as_index)
+    await remove_cmd.finish(result)
+
+
+@backpack.handle()
+async def _(
+    bot: Bot,
+    event: Union[GroupMessageEvent, PrivateMessageEvent],
+    arg: Message = CommandArg(),
+):
+    user_id = event.get_user_id()
+    is_superuser = str(user_id) in bot.config.superusers
+    is_self = event.self_id == user_id
+    if not is_superuser and not is_self:
+        user_id = user_id
+    else:
+        args = shlex.split(arg.extract_plain_text())
+        target = await get_at(event)
+        if target:
+            args.insert(0, target)
+        if len(args) >= 1:
+            user_id = args[0]
+        else:
+            user_id = user_id
+
     if not config.backpack_forward:
         await backpack.finish(
-            MessageSegment.at(user_id)
-            + " \n"
+            (MessageSegment.at(user_id) + " \n")
+            if isinstance(event, GroupMessageEvent)
+            else ""
             + await get_stats(user_id)
             + "\n"
             + await get_balance(user_id)
@@ -227,7 +312,8 @@ async def _(bot: Bot, event: Union[GroupMessageEvent, PrivateMessageEvent]):
         )
     else:
         messages: list[MessageSegment] = []
-        messages.append(MessageSegment.at(user_id))
+        if isinstance(event, GroupMessageEvent):
+            messages.append(MessageSegment.at(user_id))
         messages.append(await get_stats(user_id))
         messages.append(await get_balance(user_id))
         backpacks = await get_backpack(user_id)
@@ -236,7 +322,9 @@ async def _(bot: Bot, event: Union[GroupMessageEvent, PrivateMessageEvent]):
 
 
 @buy.handle()
-async def _(event: Event, arg: Message = CommandArg()):
+async def _(
+    event: Union[GroupMessageEvent, PrivateMessageEvent], arg: Message = CommandArg()
+):
     args = arg.extract_plain_text().split(" ")
     args = [x for x in args if x != ""]
 
@@ -261,29 +349,49 @@ async def _(event: Event, arg: Message = CommandArg()):
 
 
 @sell.handle()
-async def _(event: Event, arg: Message = CommandArg()):
+async def _(
+    event: Union[GroupMessageEvent, PrivateMessageEvent], arg: Message = CommandArg()
+):
     args = shlex.split(arg.extract_plain_text())
-
     user_id = event.get_user_id()
+    as_index = False
+    as_special = False
+
+    logger.info(f"Sell: {user_id} sells :{args}")
+
     if args == []:
         await sell.finish(
             MessageSegment.at(user_id)
             + " "
             + "请输入要卖出的鱼的名字和数量 (数量为1时可省略), 如 /卖鱼 小鱼 1"
         )
+
+    for arg in copy.deepcopy(args):
+        if arg in ["-i", "--index"]:
+            as_index = True
+            args.remove(arg)
+        if arg in ["-s", "--spec", "--special"]:
+            as_special = True
+            args.remove(arg)
+
     if len(args) == 1:
-        fish_name = args[0]
-        await sell.finish(
-            MessageSegment.at(user_id) + " " + await sell_fish(user_id, fish_name)
-        )
+        name_or_index = args[0]
+        fish_quantity = 1
     else:
-        fish_name, fish_quantity = args[0], args[1]
-        result = await sell_fish(user_id, fish_name, int(fish_quantity))
-        await sell.finish(MessageSegment.at(user_id) + " " + result)
+        name_or_index, fish_quantity = args[0], args[1]
+
+    result = await sell_fish(
+        user_id, name_or_index, int(fish_quantity), as_index, as_special
+    )
+    await sell.finish(MessageSegment.at(user_id) + " " + result)
 
 
 @free_fish_cmd.handle()
-async def _(bot: Bot, event: Event, arg: Message = CommandArg()):
+async def _(
+    bot: Bot,
+    event: Union[GroupMessageEvent, PrivateMessageEvent],
+    arg: Message = CommandArg(),
+):
     if not config.special_fish_enabled:
         await free_fish_cmd.finish("未开启此功能, 请联系机器人管理员")
 
@@ -296,7 +404,7 @@ async def _(bot: Bot, event: Event, arg: Message = CommandArg()):
         or "\u200d" in fish_name
         or "\u2060" in fish_name
         or "\ufeff" in fish_name
-    ):
+    ):  # TODO: 检测特殊字符
         if isinstance(event, GroupMessageEvent):
             group_id = event.group_id
             await bot.set_group_ban(group_id=group_id, user_id=user_id, duration=1800)
@@ -314,7 +422,9 @@ async def _(bot: Bot, event: Event, arg: Message = CommandArg()):
 
 
 @lottery_cmd.handle()
-async def _(bot: Bot, event: Event, matcher: Matcher):
+async def _(
+    bot: Bot, event: Union[GroupMessageEvent, PrivateMessageEvent], matcher: Matcher
+):
     user_id = event.get_user_id()
     try:
         await punish(bot, event, matcher, user_id)
@@ -345,17 +455,27 @@ async def _(
     if not is_superuser and not is_self:
         return None
 
-    target = await get_at(event)
     args = shlex.split(arg.extract_plain_text())
+
+    for arg in copy.deepcopy(args):
+        if arg in ["-i", "--index"]:
+            as_index = True
+            args.remove(arg)
+        if arg in ["-s", "--spec", "--special"]:
+            as_special = True
+            args.remove(arg)
+
+    target = await get_at(event)
     if target:
         args.insert(0, target)
+
     if len(args) < 2 or len(args) > 3:
         await give_cmd.finish(
             "请输入用户的 id 和鱼的名字和数量 (数量为1时可省略), 如 /give 114514 开发鱼 1"
         )
     else:
         quantity = int(args[2]) if len(args) == 3 else 1
-        result = await give(args[0], args[1], quantity)
+        result = await give(args[0], args[1], quantity, as_index, as_special)
         achievements = await check_achievement(args[0])
         if achievements is not None:
             for achievement in achievements:
@@ -390,7 +510,12 @@ async def _(bot: Bot, event: Union[GroupMessageEvent, PrivateMessageEvent]):
     await board_cmd.finish(msg)
 
 
-async def punish(bot: Bot, event: Event, matcher: Matcher, user_id: int):
+async def punish(
+    bot: Bot,
+    event: Union[GroupMessageEvent, PrivateMessageEvent],
+    matcher: Matcher,
+    user_id: int,
+):
     global punish_user_dict
 
     if not await can_fishing(user_id):
