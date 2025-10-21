@@ -597,6 +597,19 @@ async def lottery(user_id: str) -> str:
         fishes_record = await session.scalar(select_user)
         if fishes_record:
             user_coin = fishes_record.coin
+            if user_coin < 0:
+                new_coin = random.randrange(1, 50)
+                user_update = (
+                    update(FishingRecord)
+                    .where(FishingRecord.user_id == user_id)
+                    .values(
+                        time=time_now + fishing_cooldown,
+                        coin=0 + new_coin,
+                    )
+                )
+                await session.execute(user_update)
+                await session.commit()
+                return f"你是不是被哪个坏心眼的神惩罚了……河神帮你还完了欠款"
             if user_coin <= 30:
                 new_coin = random.randrange(1, 50)
                 user_update = (
@@ -697,15 +710,13 @@ async def give(
                 )
                 await session.execute(user_update)
                 await session.commit()
-            
+
             fish_name = (
                 fish_name[:20] + "..." + str(len(fish_name) - 20)
                 if len(fish_name) > 20
                 else fish_name
             )
-            return (
-                f"使用滥权之力成功为 {user_id} {"增加" if quantity >= 0 else "减少"} {abs(quantity)} 条 {fish_name} ヾ(≧▽≦*)o"
-            )
+            return f"使用滥权之力成功为 {user_id} {"增加" if quantity >= 0 else "减少"} {abs(quantity)} 条 {fish_name} ヾ(≧▽≦*)o"
         return "未查找到用户信息, 无法执行滥权操作 w(ﾟДﾟ)w"
 
 
@@ -745,7 +756,7 @@ async def remove_special_fish(name_or_index: str, as_index: bool = False) -> str
         delete_fishes = delete(SpecialFishes).where(SpecialFishes.fish == fish_name)
         await session.execute(delete_fishes)
         await session.commit()
-        
+
     fish_name = (
         fish_name[:20] + "..." + str(len(fish_name) - 20)
         if len(fish_name) > 20
@@ -779,7 +790,11 @@ async def get_pool(name_limit: int = 30, page_limit: int = 200) -> list[MessageS
             i += 1
             j += 1
         else:
-            fish = fish[:name_limit] + "..." if len(fish) > name_limit else fish
+            fish = (
+                fish[:name_limit] + "..." + str(len(fish) - name_limit)
+                if len(fish) > name_limit
+                else fish
+            )
             msg += f"{i}. {fish} x {num}\n"
             i += 1
     else:
@@ -808,7 +823,7 @@ async def get_balance(user_id: str) -> str:
         return "🪙你什么也没有 :)"
 
 
-async def get_backpack(user_id: str) -> list[str]:
+async def get_backpack(user_id: str, limit: int | None = None) -> list[str]:
     session = get_session()
     async with session.begin():
         select_user = select(FishingRecord).where(FishingRecord.user_id == user_id)
@@ -821,7 +836,10 @@ async def get_backpack(user_id: str) -> list[str]:
             spec_fishes: dict = json.loads(fishes_record.special_fishes)
             if spec_fishes:
                 spec_fishes = dict(sorted(spec_fishes.items()))
-                return print_backpack(loads_fishes, spec_fishes)
+                if limit:
+                    return print_backpack(loads_fishes, spec_fishes, limit)
+                else:
+                    return print_backpack(loads_fishes, spec_fishes)
             return (
                 ["🎒你的背包里空无一物"]
                 if loads_fishes == {}
@@ -830,7 +848,9 @@ async def get_backpack(user_id: str) -> list[str]:
         return ["🎒你的背包里空无一物"]
 
 
-def print_backpack(backpack: dict, special_backpack: dict = None) -> list[str]:
+def print_backpack(
+    backpack: dict, special_backpack: dict = None, limit: int | None = None
+) -> list[str]:
     i = 0
     result = []
     for fish_name, quantity in backpack.items():
@@ -841,7 +861,12 @@ def print_backpack(backpack: dict, special_backpack: dict = None) -> list[str]:
         i = 0
         special_result: list[str] = []
         for fish_name, quantity in special_backpack.items():
-            special_result.append(f"{i}. {fish_name}×{str(quantity)}")
+            if limit:
+                special_result.append(
+                    f"{i}. {fish_name[:limit] + '...' + str(len(fish_name) - limit) if len(fish_name) > limit else fish_name}×{str(quantity)}"
+                )
+            else:
+                special_result.append(f"{i}. {fish_name}×{str(quantity)}")
             i += 1
         return [
             "🎒普通鱼:\n" + "\n".join(result),

@@ -4,11 +4,11 @@ build-backend = "poetry.core.masonry.api"
 
 [project]
 name = "nonebot-plugin-fishing2"
-version = "0.1.1"
+version = "1.0.1"
 description = "更好的电子钓鱼"
 authors = [
-    {name = "ALittleBot", email = "160833462+C14H22O@users.noreply.github.com"},
-    {name = "Polaris_Light", email = "995905922@qq.com" }
+    {name = "Polaris_Light", email = "995905922@qq.com" },
+    {name = "ALittleBot", email = "160833462+C14H22O@users.noreply.github.com"}
 ]
 dependencies = [
     "nonebot2>=2.2.1",

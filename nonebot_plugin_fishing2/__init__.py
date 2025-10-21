@@ -76,7 +76,7 @@ __plugin_meta__ = PluginMetadata(
     homepage="https://github.com/GLDYM/nonebot-plugin-fishing2",
     config=Config,
     supported_adapters={"~onebot.v11"},
-    extra={"author": "Polaris_Light", "version": "0.1.1", "priority": 5},
+    extra={"author": "Polaris_Light", "version": "1.0.0", "priority": 5},
 )
 
 
@@ -316,9 +316,13 @@ async def _(
             messages.append(MessageSegment.at(user_id))
         messages.append(await get_stats(user_id))
         messages.append(await get_balance(user_id))
-        backpacks = await get_backpack(user_id)
-        messages += [MessageSegment.text(msg) for msg in backpacks]
-        await forward_send(bot, event, messages)
+        try:
+            backpacks = await get_backpack(user_id)
+            await forward_send(bot, event, messages + [MessageSegment.text(msg) for msg in backpacks])
+        except ActionFailed:
+            backpacks = await get_backpack(user_id, 40)
+            await forward_send(bot, event, messages + [MessageSegment.text(msg) for msg in backpacks])            
+            
 
 
 @buy.handle()
@@ -399,7 +403,8 @@ async def _(
     user_id = event.get_user_id()
 
     if (
-        "\u200b" in fish_name
+        len(fish_name) > 500
+        or "\u200b" in fish_name
         or "\u200c" in fish_name
         or "\u200d" in fish_name
         or "\u2060" in fish_name
@@ -407,7 +412,10 @@ async def _(
     ):  # TODO: 检测特殊字符
         if isinstance(event, GroupMessageEvent):
             group_id = event.group_id
-            await bot.set_group_ban(group_id=group_id, user_id=user_id, duration=1800)
+            try:
+                await bot.set_group_ban(group_id=group_id, user_id=user_id, duration=1800)
+            except ActionFailed:
+                pass
         await free_fish_cmd.finish(
             MessageSegment.at(user_id) + " " + "你 TM 在放生什么？滚滚滚"
         )
@@ -456,6 +464,8 @@ async def _(
         return None
 
     args = shlex.split(arg.extract_plain_text())
+    as_index = False
+    as_special = False
 
     for arg in copy.deepcopy(args):
         if arg in ["-i", "--index"]:

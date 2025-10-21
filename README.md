@@ -7,7 +7,7 @@
 _✨ 更好的电子钓鱼 ✨_
 
 <a href="./LICENSE">
-    <img src="https://img.shields.io/github/license/FDCraft/nonebot-plugin-fishing2.svg" alt="license">
+    <img src="https://img.shields.io/github/license/GLDYM/nonebot-plugin-fishing2.svg" alt="license">
 </a>
 <a href="https://pypi.python.org/pypi/nonebot-plugin-fishing2">
     <img src="https://img.shields.io/pypi/v/nonebot-plugin-fishing2.svg" alt="pypi">
@@ -135,4 +135,3 @@ FISHES='
 - [x] 买装备！
 - [x] 支持卖与普通鱼同名的特殊鱼
 - [x] 管理员命令：捞鱼
-- [ ] 屏蔽词库
