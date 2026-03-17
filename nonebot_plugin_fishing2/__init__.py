@@ -76,7 +76,7 @@ __plugin_meta__ = PluginMetadata(
     homepage="https://github.com/GLDYM/nonebot-plugin-fishing2",
     config=Config,
     supported_adapters={"~onebot.v11"},
-    extra={"author": "Polaris_Light", "version": "1.0.0", "priority": 5},
+    extra={"author": "Polaris_Light", "version": "1.0.2", "priority": 5},
 )
 
 
