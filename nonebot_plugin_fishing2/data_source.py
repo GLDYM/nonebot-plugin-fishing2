@@ -221,7 +221,7 @@ def predict(tools: list = None) -> str:
     expected_value = sum(v * p for v, p in zip(adjusted_fishes_value, probabilities))
 
     result += f"鱼列表：[{', '.join(adjusted_fishes_list)}]\n"
-    result += f"概率列表: [{', '.join([str(round(w * 100, 2)) + "%" for w in probabilities])}]\n"
+    result += f'''概率列表: [{', '.join([str(round(w * 100, 2)) + "%" for w in probabilities])}]\n'''
     result += f"特殊鱼概率：{round(sp_t * (1 - no_t), 6)}\n"
     result += f"空军概率：{round(no_t, 6)}\n"
 
